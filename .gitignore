@@ -1,0 +1,32 @@
+﻿# --- Node / JS ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+coverage/
+dist/
+.tmp/
+.cache/
+
+# Mantén package-lock.json para reproducibilidad (¡NO lo ignores!)
+# package-lock.json
+
+# --- SO / IDE ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Env / credenciales ---
+.env
+.env.*
+*.env
+
+# --- Git / misc ---
+*.log
+*.tgz
+
+# --- Reports / artifacts locales (si los generas) ---
+reports/
+artifacts/
