@@ -9,7 +9,7 @@ jobs:
   build_test_sast_deps:
     name: Build, Test, SAST & Dep Scan
     runs-on: ubuntu-latest
-    # 👇 Todos los "run:" de este job se ejecutan dentro de /app
+    # Todos los "run:" de este job se ejecutan dentro de /app
     defaults:
       run:
         working-directory: app
@@ -40,12 +40,12 @@ jobs:
       - name: Semgrep SAST (OWASP + custom)
         uses: returntocorp/semgrep-action@v1
         with:
-          # OJO: como el job corre "run" dentro de /app, tu .semgrep.yml está en el nivel superior (../)
+          # Como este job corre en /app, tu .semgrep.yml está un nivel arriba
           config: >
             p/owasp-top-ten
             ../.semgrep.yml
         env:
-          # (Opcional) para dashboards en Semgrep App:
+          # (Opcional) dashboard en Semgrep App:
           # SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
           SEMGREP_ENABLE_VERSION_CHECK: "0"
 
@@ -58,7 +58,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
           format: table
-          exit-code: '0'   # ← modo didáctico (no rompe). Cambia a '1' para quality gate.
+          exit-code: '0'   # Modo didáctico (no rompe). Cambia a '1' para quality gate.
 
   docker_image_and_scan:
     name: Build Docker image & Trivy Image
@@ -79,7 +79,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
           format: table
-          exit-code: '0'   # ← cámbialo a '1' cuando quieras que falle si hay vulns
+          exit-code: '0'   # Cambia a '1' cuando quieras que falle si hay vulns
 
   dast_zap:
     name: ZAP Baseline (DAST)
@@ -95,21 +95,11 @@ jobs:
       - name: Create docker network
         run: docker network create zapnet
 
-      - name: Run OWASP ZAP baseline scan
-        run: |
-          mkdir -p reports
-          docker run --rm \
-            -v "$(pwd)/reports:/zap/wrk/reports" \
-            --network zapnet \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://devsecops-demo-app:3000 \
-            -r reports/zap-report.html -x reports/zap-report.xml -w reports/zap-warn.md
-
-
       - name: Start app container on zapnet
         run: |
+          # Levanta la app con nombre 'demoapp'
           docker run -d --rm --name demoapp --network zapnet -p 3000:3000 devsecops-demo-app:ci
-          # Espera a que /healthz responda desde la MISMA red docker
+          # Espera a que /healthz responda desde la misma red docker
           for i in {1..90}; do
             docker run --rm --network zapnet curlimages/curl:8.10.1 -sf demoapp:3000/healthz && break
             sleep 1
@@ -117,7 +107,9 @@ jobs:
 
       - name: Run ZAP Baseline (manual docker run)
         run: |
+          # Carpeta de reports en el workspace del runner
           mkdir -p reports
+          # Ejecuta ZAP dentro de su contenedor, en la MISMA red, y escribe en /zap/wrk/reports
           docker run --rm --network zapnet \
             -v "$GITHUB_WORKSPACE:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
@@ -143,5 +135,3 @@ jobs:
         run: |
           docker rm -f demoapp || true
           docker network rm zapnet || true
-
-
