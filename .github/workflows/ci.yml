@@ -1,0 +1,114 @@
+name: CI DevSecOps
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build_test_sast_deps:
+    name: Build, Test, SAST & Dep Scan
+    runs-on: ubuntu-latest
+    # 👇 Todos los "run:" de este job se ejecutan dentro de /app
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Start app & run unit test
+        run: |
+          node src/app.js &
+          APP_PID=$!
+          for i in {1..30}; do
+            curl -sf http://localhost:3000/healthz && break
+            sleep 1
+          done
+          npm test
+          kill $APP_PID
+
+      - name: Semgrep SAST (OWASP + custom)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          # OJO: como el job corre "run" dentro de /app, tu .semgrep.yml está en el nivel superior (../)
+          config: >
+            p/owasp-top-ten
+            ../.semgrep.yml
+        env:
+          # (Opcional) para dashboards en Semgrep App:
+          # SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+
+      - name: Trivy FS (dependency scan en /app)
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: app
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: table
+          exit-code: '0'   # ← modo didáctico (no rompe). Cambia a '1' para quality gate.
+
+  docker_image_and_scan:
+    name: Build Docker image & Trivy Image
+    needs: build_test_sast_deps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t devsecops-demo-app:ci ./app
+
+      - name: Trivy Image scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: devsecops-demo-app:ci
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          format: table
+          exit-code: '0'   # ← cámbialo a '1' cuando quieras que falle si hay vulns
+
+  dast_zap:
+    name: ZAP Baseline (DAST)
+    needs: build_test_sast_deps
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Aquí solo esta step usa /app; el resto (incluido ZAP) corre en raíz del repo
+      - name: Start app (background)
+        working-directory: app
+        run: |
+          node src/app.js &
+          echo $! > app.pid
+          for i in {1..30}; do
+            curl -sf http://localhost:3000/healthz && break
+            sleep 1
+          done
+
+      - name: OWASP ZAP Baseline scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:3000'
+          rules_file_name: '.zap/rules.tsv'   # relativo a la raíz del repo
+          allow_issue_writing: false
+          cmd_options: '-a'                   # baseline con algo de activo
+
+      - name: Stop app
+        if: always()
+        run: |
+          kill $(cat app/app.pid) || true
