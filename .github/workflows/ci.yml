@@ -89,26 +89,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Aquí solo esta step usa /app; el resto (incluido ZAP) corre en raíz del repo
-      - name: Start app (background)
-        working-directory: app
+      - name: Build Docker image (app)
+        run: docker build -t devsecops-demo-app:ci ./app
+
+      - name: Create docker network
+        run: docker network create zapnet
+
+      - name: Start app container on zapnet
         run: |
-          node src/app.js &
-          echo $! > app.pid
-          for i in {1..30}; do
-            curl -sf http://localhost:3000/healthz && break
+          docker run -d --rm --name demoapp --network zapnet -p 3000:3000 devsecops-demo-app:ci
+          for i in {1..60}; do
+            docker run --rm --network zapnet curlimages/curl:8.10.1 -sf demoapp:3000/healthz && break
             sleep 1
           done
 
-      - name: OWASP ZAP Baseline scan
+      - name: OWASP ZAP Baseline (same docker network)
         uses: zaproxy/action-baseline@v0.12.0
         with:
-          target: 'http://localhost:3000'
-          rules_file_name: '.zap/rules.tsv'   # relativo a la raíz del repo
+          target: 'http://demoapp:3000'
+          rules_file_name: '.zap/rules.tsv'
           allow_issue_writing: false
-          cmd_options: '-a'                   # baseline con algo de activo
+          cmd_options: '-a'
+          docker_run_args: '--network zapnet'
 
-      - name: Stop app
+      - name: Stop app & cleanup
         if: always()
         run: |
-          kill $(cat app/app.pid) || true
+          docker rm -f demoapp || true
+          docker network rm zapnet || true
+
