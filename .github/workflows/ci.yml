@@ -95,6 +95,17 @@ jobs:
       - name: Create docker network
         run: docker network create zapnet
 
+      - name: Run OWASP ZAP baseline scan
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$(pwd)/reports:/zap/wrk/reports" \
+            --network zapnet \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://devsecops-demo-app:3000 \
+            -r reports/zap-report.html -x reports/zap-report.xml -w reports/zap-warn.md
+
+
       - name: Start app container on zapnet
         run: |
           docker run -d --rm --name demoapp --network zapnet -p 3000:3000 devsecops-demo-app:ci
@@ -105,8 +116,8 @@ jobs:
           done
 
       - name: Run ZAP Baseline (manual docker run)
-        # Si quieres que ZAP no marque el job como failed aún, dejamos "|| true"
         run: |
+          mkdir -p reports
           docker run --rm --network zapnet \
             -v "$GITHUB_WORKSPACE:/zap/wrk:rw" \
             ghcr.io/zaproxy/zaproxy:stable \
@@ -114,18 +125,18 @@ jobs:
               -t "http://demoapp:3000" \
               -a \
               -I \
-              -x "/zap/wrk/zap-report.xml" \
-              -w "/zap/wrk/zap-warn.md" \
-              -r "/zap/wrk/zap-report.html" || true
+              -x "/zap/wrk/reports/zap-report.xml" \
+              -w "/zap/wrk/reports/zap-warn.md" \
+              -r "/zap/wrk/reports/zap-report.html" || true
+
+      - name: List reports (debug)
+        run: ls -la reports || true
 
       - name: Upload ZAP reports
         uses: actions/upload-artifact@v4
         with:
           name: zap-reports
-          path: |
-            zap-report.html
-            zap-report.xml
-            zap-warn.md
+          path: reports/**
 
       - name: Stop app & cleanup
         if: always()
