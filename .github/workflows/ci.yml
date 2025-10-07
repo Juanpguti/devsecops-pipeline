@@ -40,7 +40,7 @@ jobs:
       - name: Semgrep SAST (OWASP + custom)
         uses: returntocorp/semgrep-action@v1
         with:
-          # Como este job corre en /app, tu .semgrep.yml está un nivel arriba
+          
           config: >
             p/owasp-top-ten
             ../.semgrep.yml
@@ -58,7 +58,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
           format: table
-          exit-code: '0'   # Modo didáctico (no rompe). Cambia a '1' para quality gate.
+          exit-code: '0'   # Cambia a '1' para quality gate.
 
   docker_image_and_scan:
     name: Build Docker image & Trivy Image
@@ -79,7 +79,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           ignore-unfixed: true
           format: table
-          exit-code: '0'   # Cambia a '1' cuando quieras que falle si hay vulns
+          exit-code: '0'   # Se cambia a '1' cuando se quiera que falle 
 
   dast_zap:
     name: ZAP Baseline (DAST)
