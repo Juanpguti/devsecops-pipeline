@@ -46,6 +46,47 @@ devsecops-pipeline/
 ├── .gitignore
 └── README.md
 ```
+## 3. Diagrama General del Flujo CI/CD
+```text
+                   +----------------------------+
+                   |        Developer           |
+                   |  Commit / Push a GitHub    |
+                   +-------------+--------------+
+                                 |
+                                 v
+                     +-----------+------------+
+                     |     GitHub Actions     |
+                     |  CI/CD Pipeline Start  |
+                     +-----------+------------+
+                                 |
+               +----------------+----------------+
+               |                                     |
+               v                                     v
+       [Build & Test]                        [SAST - Semgrep]
+     Ejecuta unit tests                 Analiza el código fuente
+     y valida /healthz                  (OWASP Top 10 + reglas locales)
+               |                                     |
+               v                                     v
+        [Dependency Scan - Trivy FS]          [Docker Build & Scan]
+       Escanea vulnerabilidades               Escaneo de imagen
+       en dependencias npm                    Docker con Trivy
+               \                                     /
+                \                                   /
+                 +-------------+-------------------+
+                               |
+                               v
+                    [DAST - OWASP ZAP Baseline]
+                  Escaneo dinámico en contenedor
+                  contra endpoints HTTP activos
+                               |
+                               v
+                     [Reportes de Seguridad]
+                 zap-report.html / trivy-report.txt
+                 semgrep-results.json (SAST)
+
+```
+
+
 ## 4. Aplicación base (Node.js + Express)
 
 ```js
